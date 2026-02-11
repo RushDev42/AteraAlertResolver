@@ -1,0 +1,21 @@
+# Secrets
+.env
+.env.*
+
+# Python
+.venv/
+__pycache__/
+*.py[cod]
+*.pyo
+.pytest_cache/
+
+# Runtime output
+sync.log
+fixtures/*.json
+
+# OS/editor
+.DS_Store
+*.swp
+
+# Build artifacts
+*.egg-info/

@@ -1,0 +1,180 @@
+from __future__ import annotations
+
+import os
+from pathlib import Path
+from dataclasses import dataclass
+from typing import Any, Dict, Iterable, List, Optional
+
+import httpx
+from pydantic import BaseModel, ConfigDict
+from tenacity import retry, retry_if_exception_type, stop_after_attempt, wait_exponential
+
+BASE_URL = "https://app.atera.com/api/v3"
+TIMEOUT_SECONDS = 30
+ITEMS_IN_PAGE = 50
+
+
+class TicketModel(BaseModel):
+    model_config = ConfigDict(extra="allow")
+
+
+class AlertModel(BaseModel):
+    model_config = ConfigDict(extra="allow")
+
+
+class ApiError(RuntimeError):
+    def __init__(self, message: str, status_code: Optional[int] = None, response_text: str = ""):
+        super().__init__(message)
+        self.status_code = status_code
+        self.response_text = response_text
+
+
+@dataclass
+class ApiResponse:
+    status_code: int
+    json_data: Any
+    text: str
+
+
+class AteraClient:
+    def __init__(self, api_key: Optional[str] = None) -> None:
+        self.api_key = api_key or os.getenv("ATERA_API_KEY", "").strip()
+        if not self.api_key:
+            self.api_key = _load_api_key_from_env_file()
+        if not self.api_key:
+            raise ApiError("Missing ATERA_API_KEY in environment")
+
+        self._client = httpx.Client(timeout=TIMEOUT_SECONDS, headers=self._base_headers())
+
+    def _base_headers(self) -> Dict[str, str]:
+        return {
+            "X-API-KEY": self.api_key,
+            "accept": "application/json",
+        }
+
+    def _headers_for_update(self) -> Dict[str, str]:
+        headers = self._base_headers()
+        headers["content-type"] = "application/json"
+        return headers
+
+    @retry(
+        retry=retry_if_exception_type(ApiError),
+        wait=wait_exponential(multiplier=1, min=1, max=16),
+        stop=stop_after_attempt(5),
+        reraise=True,
+    )
+    def request(
+        self,
+        method: str,
+        path_or_url: str,
+        params: Optional[Dict[str, Any]] = None,
+        json_body: Optional[Dict[str, Any]] = None,
+        use_update_headers: bool = False,
+    ) -> ApiResponse:
+        url = path_or_url if path_or_url.startswith("http") else f"{BASE_URL}{path_or_url}"
+        headers = self._headers_for_update() if use_update_headers else self._base_headers()
+
+        response = self._client.request(method, url, params=params, json=json_body, headers=headers)
+
+        if response.status_code == 429 or 500 <= response.status_code <= 599:
+            raise ApiError("Transient API failure", response.status_code, response.text)
+
+        try:
+            json_data = response.json()
+        except ValueError:
+            json_data = None
+
+        return ApiResponse(status_code=response.status_code, json_data=json_data, text=response.text)
+
+    def get_ticket(self, ticket_id: int) -> ApiResponse:
+        return self.request("GET", f"/tickets/{ticket_id}")
+
+    def get_alert(self, alert_id: int) -> ApiResponse:
+        return self.request("GET", f"/alerts/{alert_id}")
+
+    def list_tickets(self, status: str) -> List[Dict[str, Any]]:
+        params = {"ticketStatus": status, "itemsInPage": ITEMS_IN_PAGE}
+        return self._paginate_items(f"{BASE_URL}/tickets", params)
+
+    def list_alerts(self, status: Optional[str] = None) -> List[Dict[str, Any]]:
+        params: Dict[str, Any] = {"itemsInPage": ITEMS_IN_PAGE}
+        if status:
+            params["alertStatus"] = status
+        try:
+            return self._paginate_items(f"{BASE_URL}/alerts", params)
+        except ApiError as exc:
+            if status and exc.status_code == 400:
+                params.pop("alertStatus", None)
+                return self._paginate_items(f"{BASE_URL}/alerts", params)
+            raise
+
+    def update_ticket_status(self, ticket_id: int, new_status: str) -> ApiResponse:
+        body = {"TicketStatus": new_status}
+        methods = ["POST", "PUT", "PATCH"]
+
+        last_response: Optional[ApiResponse] = None
+        for method in methods:
+            response = self.request(
+                method,
+                f"/tickets/{ticket_id}",
+                json_body=body,
+                use_update_headers=True,
+            )
+            last_response = response
+
+            if response.status_code not in (404, 405):
+                import logging
+
+                logging.getLogger("atera_sync").info(
+                    "event=ticket_update_method ticketId=%s method=%s statusCode=%s",
+                    ticket_id,
+                    method,
+                    response.status_code,
+                )
+                return response
+
+        return last_response or ApiResponse(status_code=0, json_data=None, text="")
+
+    def _paginate_items(self, initial_url: str, params: Dict[str, Any]) -> List[Dict[str, Any]]:
+        items: List[Dict[str, Any]] = []
+        next_url: Optional[str] = initial_url
+        next_params: Optional[Dict[str, Any]] = params
+
+        while next_url:
+            response = self.request("GET", next_url, params=next_params)
+            if response.status_code != 200:
+                raise ApiError(
+                    f"Failed to list items from {next_url}",
+                    response.status_code,
+                    response.text,
+                )
+
+            payload = response.json_data or {}
+            page_items = payload.get("items") or []
+            if isinstance(page_items, list):
+                items.extend(page_items)
+
+            next_link = payload.get("nextLink")
+            if not next_link:
+                next_url = None
+                next_params = None
+            else:
+                next_url = next_link
+                next_params = None
+
+        return items
+
+
+def _load_api_key_from_env_file() -> str:
+    env_path = Path(".env")
+    if not env_path.exists():
+        return ""
+
+    for line in env_path.read_text().splitlines():
+        line = line.strip()
+        if not line or line.startswith("#") or "=" not in line:
+            continue
+        key, value = line.split("=", 1)
+        if key.strip() == "ATERA_API_KEY":
+            return value.strip().strip("'").strip('"')
+    return ""

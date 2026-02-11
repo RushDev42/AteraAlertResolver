@@ -1,0 +1,7 @@
+services:
+  atera-sync:
+    build: .
+    env_file: .env
+    volumes:
+      - ./:/app
+    command: ["atera-sync", "run"]
