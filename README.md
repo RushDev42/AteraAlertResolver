@@ -41,7 +41,7 @@ atera-sync test
 Docker:
 
 ```bash
-docker compose run --rm atera-sync atera-sync test
+docker compose run --rm atera-sync test
 ```
 
 This fetches tickets `9981` and `9956`, prints a redacted summary (ticket id, status, source, alert id), and saves full JSON to `fixtures/`.
@@ -71,7 +71,7 @@ atera-sync run
 Docker:
 
 ```bash
-docker compose run --rm atera-sync atera-sync run
+docker compose run --rm atera-sync run
 ```
 
 ## Tests
@@ -91,7 +91,7 @@ docker compose run --rm atera-sync atera-sync test
 ### Linux cron (daily at 02:00)
 
 ```cron
-0 2 * * * cd /home/master/Development/AteraAlertResolver && docker compose run --rm atera-sync atera-sync run >> sync.log 2>&1
+0 2 * * * cd /home/master/Development/AteraAlertResolver && docker compose run --rm atera-sync run >> sync.log 2>&1
 ```
 
 ### Windows Task Scheduler
@@ -99,7 +99,7 @@ docker compose run --rm atera-sync atera-sync test
 Create a daily task at 02:00 with the action:
 
 ```
-docker compose run --rm atera-sync atera-sync run
+docker compose run --rm atera-sync run
 ```
 
 Set the “Start in” directory to:

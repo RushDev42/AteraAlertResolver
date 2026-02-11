@@ -4,4 +4,4 @@ services:
     env_file: .env
     volumes:
       - ./:/app
-    command: ["atera-sync", "run"]
+    command: ["run"]
