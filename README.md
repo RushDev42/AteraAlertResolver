@@ -83,20 +83,20 @@ pytest
 Tests load fixtures from `fixtures/`. Run the test command first to populate ticket fixtures:
 
 ```bash
-docker compose run --rm atera-sync atera-sync test
+docker compose run --rm atera-sync test
 ```
 
 ## Scheduling (outside container only)
 
-### Linux cron (daily at 02:00)
+### Linux cron (hourly from 08:00 to 18:00)
 
 ```cron
-0 2 * * * cd /home/master/Development/AteraAlertResolver && docker compose run --rm atera-sync run >> sync.log 2>&1
+0 8-18 * * * cd /home/docker/AteraAlertResolver && /usr/bin/docker compose run --rm atera-sync run >> /home/docker/AteraAlertResolver/sync.log 2>&1
 ```
 
 ### Windows Task Scheduler
 
-Create a daily task at 02:00 with the action:
+Create a daily task that runs hourly from 08:00 to 18:00 with the action:
 
 ```
 docker compose run --rm atera-sync run
