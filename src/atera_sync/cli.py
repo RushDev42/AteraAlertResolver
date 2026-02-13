@@ -127,11 +127,14 @@ def alerts_export_command() -> None:
 
 
 @app.command("run")
-def run_command() -> None:
+def run_command(
+    max_alerts: int = typer.Argument(50, min=1),
+    days_back: int = typer.Argument(3, min=1),
+) -> None:
     """Run alert-ticket sync for current tickets."""
     _configure_logging()
     client = AteraClient()
-    exit_code = run_sync(client, "Open")
+    exit_code = run_sync(client, "Resolved", max_alerts=max_alerts, days_back=days_back)
     if exit_code != 0:
         raise typer.Exit(code=exit_code)
 

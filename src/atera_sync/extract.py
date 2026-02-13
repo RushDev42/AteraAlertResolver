@@ -107,6 +107,29 @@ def extract_alert_status(alert_json: Dict[str, Any]) -> Optional[str]:
     return None
 
 
+def extract_alert_severity(alert_json: Dict[str, Any]) -> Optional[str]:
+    if not isinstance(alert_json, dict):
+        return None
+
+    candidate_keys = ["Severity", "AlertSeverity", "severity", "alertSeverity"]
+    value = _extract_from_keys(alert_json, candidate_keys)
+    if isinstance(value, dict):
+        value = value.get("Name") or value.get("Value")
+    if isinstance(value, str):
+        return value
+
+    for key, nested in alert_json.items():
+        if isinstance(key, str) and "severity" in key.lower():
+            if isinstance(nested, str):
+                return nested
+            if isinstance(nested, dict):
+                nested_value = nested.get("Name") or nested.get("Value")
+                if isinstance(nested_value, str):
+                    return nested_value
+
+    return None
+
+
 def extract_ticket_status(ticket_json: Dict[str, Any]) -> Optional[str]:
     if not isinstance(ticket_json, dict):
         return None

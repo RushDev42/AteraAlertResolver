@@ -40,9 +40,11 @@ class AteraClient:
     def __init__(self, api_key: Optional[str] = None) -> None:
         self.api_key = api_key or os.getenv("ATERA_API_KEY", "").strip()
         if not self.api_key:
-            self.api_key = _load_api_key_from_env_file()
+            self.api_key = _load_env_value_from_env_file("ATERA_API_KEY")
         if not self.api_key:
             raise ApiError("Missing ATERA_API_KEY in environment")
+        self.technician_id = _load_optional_int_env("ATERA_TECHNICIAN_ID")
+        self.technician_email = _load_optional_str_env("ATERA_TECHNICIAN_EMAIL")
 
         self._client = httpx.Client(timeout=TIMEOUT_SECONDS, headers=self._base_headers())
 
@@ -96,16 +98,16 @@ class AteraClient:
         params = {"ticketStatus": status, "itemsInPage": ITEMS_IN_PAGE}
         return self._paginate_items(f"{BASE_URL}/tickets", params)
 
-    def list_alerts(self, status: Optional[str] = None) -> List[Dict[str, Any]]:
+    def list_alerts(self, status: Optional[str] = None, max_items: Optional[int] = None) -> List[Dict[str, Any]]:
         params: Dict[str, Any] = {"itemsInPage": ITEMS_IN_PAGE}
         if status:
             params["alertStatus"] = status
         try:
-            return self._paginate_items(f"{BASE_URL}/alerts", params)
+            return self._paginate_items(f"{BASE_URL}/alerts", params, max_items=max_items)
         except ApiError as exc:
             if status and exc.status_code == 400:
                 params.pop("alertStatus", None)
-                return self._paginate_items(f"{BASE_URL}/alerts", params)
+                return self._paginate_items(f"{BASE_URL}/alerts", params, max_items=max_items)
             raise
 
     def update_ticket_status(self, ticket_id: int, new_status: str) -> ApiResponse:
@@ -135,7 +137,33 @@ class AteraClient:
 
         return last_response or ApiResponse(status_code=0, json_data=None, text="")
 
-    def _paginate_items(self, initial_url: str, params: Dict[str, Any]) -> List[Dict[str, Any]]:
+    def add_ticket_comment(self, ticket_id: int, comment_text: str) -> ApiResponse:
+        if not self.technician_id:
+            raise ApiError("Missing ATERA_TECHNICIAN_ID in environment for ticket comments")
+
+        body: Dict[str, Any] = {
+            "CommentText": comment_text,
+            "TechnicianCommentDetails": {
+                "TechnicianId": self.technician_id,
+                "IsInternal": True,
+            },
+        }
+        if self.technician_email:
+            body["TechnicianCommentDetails"]["TechnicianEmail"] = self.technician_email
+
+        return self.request(
+            "POST",
+            f"/tickets/{ticket_id}/comments",
+            json_body=body,
+            use_update_headers=True,
+        )
+
+    def _paginate_items(
+        self,
+        initial_url: str,
+        params: Dict[str, Any],
+        max_items: Optional[int] = None,
+    ) -> List[Dict[str, Any]]:
         items: List[Dict[str, Any]] = []
         next_url: Optional[str] = initial_url
         next_params: Optional[Dict[str, Any]] = params
@@ -153,6 +181,8 @@ class AteraClient:
             page_items = payload.get("items") or []
             if isinstance(page_items, list):
                 items.extend(page_items)
+                if max_items is not None and len(items) >= max_items:
+                    return items[:max_items]
 
             next_link = payload.get("nextLink")
             if not next_link:
@@ -165,7 +195,7 @@ class AteraClient:
         return items
 
 
-def _load_api_key_from_env_file() -> str:
+def _load_env_value_from_env_file(name: str) -> str:
     env_path = Path(".env")
     if not env_path.exists():
         return ""
@@ -175,6 +205,24 @@ def _load_api_key_from_env_file() -> str:
         if not line or line.startswith("#") or "=" not in line:
             continue
         key, value = line.split("=", 1)
-        if key.strip() == "ATERA_API_KEY":
+        if key.strip() == name:
             return value.strip().strip("'").strip('"')
     return ""
+
+
+def _load_optional_int_env(name: str) -> Optional[int]:
+    raw = os.getenv(name, "").strip()
+    if not raw:
+        raw = _load_env_value_from_env_file(name)
+    if not raw:
+        return None
+    if raw.isdigit():
+        return int(raw)
+    raise ApiError(f"Invalid {name}; expected integer")
+
+
+def _load_optional_str_env(name: str) -> Optional[str]:
+    raw = os.getenv(name, "").strip()
+    if not raw:
+        raw = _load_env_value_from_env_file(name)
+    return raw or None

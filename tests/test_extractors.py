@@ -6,6 +6,7 @@ import pytest
 from atera_sync.extract import (
     detect_ticket_source,
     extract_alert_id,
+    extract_alert_severity,
     extract_alert_status,
     extract_ticket_id_from_alert,
     extract_ticket_status,
@@ -49,3 +50,8 @@ def test_extract_ticket_id_from_alert_fixture_if_present():
         pytest.skip("Fixture fixtures/alert_sample.json not found. Optional.")
     alert = json.loads(alert_fixture.read_text())
     assert isinstance(extract_ticket_id_from_alert(alert), (int, type(None)))
+
+
+def test_extract_alert_severity_from_inline_shapes():
+    assert extract_alert_severity({"Severity": "Critical"}) == "Critical"
+    assert extract_alert_severity({"alertSeverity": {"Name": "Warning"}}) == "Warning"
