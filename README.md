@@ -128,6 +128,7 @@ C:\path\to\AteraAlertResolver
 
 - Alerts are listed with status `Resolved` during `atera-sync run` and used to discover related ticket ids.
 - `atera-sync run` uses positional args (`max_alerts days_back`); current production setting is `100 14`.
+- If older resolved alerts were missed (for example after downtime/backlog), run a one-off catch-up with `atera-sync run 500 14`, then return to `100 14`.
 - Alerts are actionable only when severity is `Warning` or `Critical`; `Information` alerts are skipped.
 - Pagination uses `itemsInPage=50` and follows `nextLink` until empty, accumulating `items`.
 - `max_alerts` is applied during pagination to avoid pulling full alert history when capped.
