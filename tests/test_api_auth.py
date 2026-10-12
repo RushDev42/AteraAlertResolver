@@ -23,6 +23,10 @@ def test_token_is_sent_as_bearer_for_reads_and_writes() -> None:
     client.update_ticket_status(456, "Resolved")
 
     assert [request.method for request in requests] == ["GET", "POST"]
+    assert [str(request.url) for request in requests] == [
+        "https://api.atera.com/api/v3/alerts/123",
+        "https://api.atera.com/api/v3/tickets/456",
+    ]
     for request in requests:
         assert request.headers["Authorization"] == "Bearer test-token"
         assert "X-API-KEY" not in request.headers

@@ -206,7 +206,8 @@
       <div class="meta">
         <span>Repository: <code>AteraAlertResolver</code></span>
         <span>Original review: July 1, 2026; authentication updated: October 12, 2026</span>
-        <span>Official API references checked: <a href="https://app.atera.com/apidocs#/">interactive docs</a>, <a href="https://app.atera.com/swagger/docs/v3">Swagger JSON</a></span>
+        <span>Official API references checked in the original July review: <a href="https://app.atera.com/apidocs#/">interactive docs</a>, <a href="https://app.atera.com/swagger/docs/v3">Swagger JSON</a></span>
+        <span>Token migration reference: <a href="https://api.atera.com/devportal/#overview">current developer portal</a>, <a href="https://api.atera.com/proxy/publicapi/v3/openapi">OpenAPI specification</a></span>
       </div>
     </section>
 
@@ -270,12 +271,13 @@
         </div>
         <p>The request model is broadly aligned with the published Atera v3 spec, but there are a few contract mismatches and undocumented assumptions. Authentication was updated after the original review; live token validation remains pending.</p>
         <ul>
-          <li><strong>Issue:</strong> <code>GET /api/v3/alerts/{alertId}</code> is treated as success only on HTTP <code>200</code>, while the current published Swagger response is <code>201</code>.</li>
+          <li><strong>Updated verification:</strong> the current OpenAPI specification documents HTTP <code>200</code> with an alert payload for <code>GET /api/v3/alerts/{alertId}</code>, matching the client's success check. It also lists <code>201</code> without a response schema; the original review's claim that only <code>201</code> was documented is outdated.</li>
           <li><strong>Issue:</strong> alert-list filtering silently drops <code>alertStatus</code> after a <code>400</code>, which hides contract drift instead of surfacing it.</li>
           <li><strong>Issue:</strong> ticket updates probe <code>POST</code>, <code>PUT</code>, then <code>PATCH</code>; the current docs publish <code>POST</code> and <code>PUT</code>, not <code>PATCH</code>.</li>
           <li><strong>Authentication update (October 12, 2026):</strong> the client reads <code>ATERA_API_TOKEN</code> and sends <code>Authorization: Bearer &lt;token&gt;</code>, as shown in <a href="https://support.atera.com/hc/en-us/articles/219083397-Using-the-Atera-API">Atera's token guide</a> and its <a href="https://support.atera.com/hc/article_attachments/28172364758044">authentication example</a>. The legacy <code>X-API-KEY</code> header is no longer used by this repository. Unit tests cover the request header; live Atera validation must be performed with a token in the deployment environment.</li>
+          <li><strong>API destination:</strong> the configured base URL is <code>https://api.atera.com/api/v3</code>. Requests and pagination links are restricted to HTTPS on <code>api.atera.com</code>, port 443, with no embedded URL credentials. Redirects are not followed. Mocked tests verify that blocked destinations receive no requests.</li>
           <li><strong>Aligned in the original review:</strong> pagination via <code>items</code> and <code>nextLink</code>, ticket comment payload shape, and <code>{"TicketStatus":"Resolved"}</code> updates.</li>
-          <li><strong>Resolve:</strong> accept the documented alert-detail success code, remove or log the unfiltered fallback path, and tighten method usage to published endpoints only.</li>
+          <li><strong>Resolve:</strong> remove or log the unfiltered fallback path, and tighten method usage to published endpoints only.</li>
         </ul>
       </article>
 
@@ -299,7 +301,7 @@
       <ul>
         <li>Stabilize the runtime contract first: explicit build backend, configurable paths, and production-safe Docker execution.</li>
         <li>Make scheduling durable next: overlap protection, idempotent retry behavior, and wrapper scripts for cron and Task Scheduler.</li>
-        <li>Correct the documented Atera API mismatches, especially alert-detail success handling and undocumented method fallbacks.</li>
+        <li>Correct the remaining Atera API mismatches, especially undocumented method fallbacks.</li>
         <li>Add a minimal operator surface last: structured run records plus a small HTML status page or lightweight local web app.</li>
       </ul>
     </section>

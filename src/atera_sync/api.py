@@ -9,7 +9,7 @@ import httpx
 from pydantic import BaseModel, ConfigDict
 from tenacity import retry, retry_if_exception_type, stop_after_attempt, wait_exponential
 
-BASE_URL = "https://app.atera.com/api/v3"
+BASE_URL = "https://api.atera.com/api/v3"
 TIMEOUT_SECONDS = 30
 ITEMS_IN_PAGE = 50
 
@@ -34,6 +34,27 @@ class ApiResponse:
     status_code: int
     json_data: Any
     text: str
+
+
+def _validated_api_url(path_or_url: str) -> httpx.URL:
+    try:
+        url = httpx.URL(path_or_url)
+        if not url.scheme and not url.host:
+            url = httpx.URL(f"{BASE_URL}/{path_or_url.lstrip('/')}")
+    except httpx.InvalidURL:
+        raise ValueError("Invalid Atera API request URL") from None
+
+    base_url = httpx.URL(BASE_URL)
+    if (
+        (url.scheme, url.host, url.port)
+        != (base_url.scheme, base_url.host, base_url.port)
+        or url.userinfo
+    ):
+        raise ValueError(
+            "Atera API requests must use https://api.atera.com on port 443 "
+            "without embedded credentials"
+        )
+    return url
 
 
 class AteraClient:
@@ -73,10 +94,12 @@ class AteraClient:
         json_body: Optional[Dict[str, Any]] = None,
         use_update_headers: bool = False,
     ) -> ApiResponse:
-        url = path_or_url if path_or_url.startswith("http") else f"{BASE_URL}{path_or_url}"
+        url = _validated_api_url(path_or_url)
         headers = self._headers_for_update() if use_update_headers else self._base_headers()
 
-        response = self._client.request(method, url, params=params, json=json_body, headers=headers)
+        response = self._client.request(
+            method, url, params=params, json=json_body, headers=headers, follow_redirects=False
+        )
 
         if response.status_code == 429 or 500 <= response.status_code <= 599:
             raise ApiError("Transient API failure", response.status_code, response.text)

@@ -71,3 +71,5 @@ Pull requests should include a short summary, test results, configuration impact
 ## Security & Configuration Tips
 
 Do not commit `.env`, API tokens, technician IDs tied to sensitive environments, or raw customer data. Redact fixture payloads before sharing. Required runtime settings are `ATERA_API_TOKEN` and `ATERA_TECHNICIAN_ID`; `ATERA_TECHNICIAN_EMAIL` is optional. The client sends `ATERA_API_TOKEN` in the `Authorization: Bearer <token>` header. The legacy `ATERA_API_KEY` setting is not used.
+
+The API base URL is `https://api.atera.com/api/v3`. Validate every request destination, including pagination links, against the HTTPS origin `https://api.atera.com` on port 443. Reject other origins and embedded URL credentials before sending a request. Do not follow redirects with authentication.
