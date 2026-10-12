@@ -37,12 +37,12 @@ class ApiResponse:
 
 
 class AteraClient:
-    def __init__(self, api_key: Optional[str] = None) -> None:
-        self.api_key = api_key or os.getenv("ATERA_API_KEY", "").strip()
-        if not self.api_key:
-            self.api_key = _load_env_value_from_env_file("ATERA_API_KEY")
-        if not self.api_key:
-            raise ApiError("Missing ATERA_API_KEY in environment")
+    def __init__(self, api_token: Optional[str] = None) -> None:
+        self.api_token = (api_token or os.getenv("ATERA_API_TOKEN", "")).strip()
+        if not self.api_token:
+            self.api_token = _load_env_value_from_env_file("ATERA_API_TOKEN")
+        if not self.api_token:
+            raise ApiError("Missing ATERA_API_TOKEN in environment")
         self.technician_id = _load_optional_int_env("ATERA_TECHNICIAN_ID")
         self.technician_email = _load_optional_str_env("ATERA_TECHNICIAN_EMAIL")
 
@@ -50,7 +50,7 @@ class AteraClient:
 
     def _base_headers(self) -> Dict[str, str]:
         return {
-            "X-API-KEY": self.api_key,
+            "Authorization": f"Bearer {self.api_token}",
             "accept": "application/json",
         }
 
