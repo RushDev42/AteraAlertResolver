@@ -14,6 +14,7 @@ Copy `.env.example` to `.env`, then set `ATERA_API_TOKEN` and `ATERA_TECHNICIAN_
 Docker Compose passes `.env` into the container via `env_file`.
 Requests authenticate with `Authorization: Bearer <token>`.
 The API base URL is `https://api.atera.com/api/v3`. All requests, including pagination, are restricted to `https://api.atera.com` on port 443 without embedded URL credentials. Redirects are not followed.
+For pagination only, legacy HTTPS links on `app.atera.com` are rewritten to the API host when they refer to the same endpoint. The path and query parameters are preserved; credentials are never sent to the legacy host. Relative pagination links are also supported.
 API reference: [Atera developer portal](https://api.atera.com/devportal/#overview) and its [OpenAPI specification](https://api.atera.com/proxy/publicapi/v3/openapi).
 Ticket comments require `ATERA_TECHNICIAN_ID` in `.env` (existing Atera technician ID).
 

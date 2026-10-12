@@ -43,7 +43,16 @@ def test_untrusted_url_is_rejected_before_sending(client: AteraClient, url: str)
         client.request("GET", url)
 
 
-def test_pagination_accepts_trusted_https_origin(client: AteraClient) -> None:
+@pytest.mark.parametrize("next_link", [
+    "https://api.atera.com:443/api/v3/alerts?page=2&itemsInPage=50&alertStatus=Resolved",
+    "https://app.atera.com/api/v3/alerts?page=2&itemsInPage=50&alertStatus=Resolved",
+    "https://app.atera.com:443/api/v3/alerts?page=2&itemsInPage=50&alertStatus=Resolved",
+    "/api/v3/alerts?page=2&itemsInPage=50&alertStatus=Resolved",
+    "?page=2&itemsInPage=50&alertStatus=Resolved",
+])
+def test_pagination_uses_api_origin_and_preserves_query(
+    client: AteraClient, next_link: str
+) -> None:
     requests: list[httpx.Request] = []
 
     def handle(request: httpx.Request) -> httpx.Response:
@@ -51,7 +60,7 @@ def test_pagination_accepts_trusted_https_origin(client: AteraClient) -> None:
         if len(requests) == 1:
             return httpx.Response(200, json={
                 "items": [{"AlertID": 1}],
-                "nextLink": "https://api.atera.com:443/api/v3/alerts?page=2",
+                "nextLink": next_link,
             })
         return httpx.Response(200, json={"items": [{"AlertID": 2}]})
 
@@ -60,15 +69,23 @@ def test_pagination_accepts_trusted_https_origin(client: AteraClient) -> None:
     assert client.list_alerts("Resolved") == [{"AlertID": 1}, {"AlertID": 2}]
     assert len(requests) == 2
     assert requests[0].url.host == "api.atera.com"
+    assert requests[1].url.host == "api.atera.com"
+    assert requests[1].url.scheme == "https"
     assert requests[1].url.path == "/api/v3/alerts"
     assert requests[1].url.params["page"] == "2"
+    assert requests[1].url.params["itemsInPage"] == "50"
+    assert requests[1].url.params["alertStatus"] == "Resolved"
     assert all(request.headers["Authorization"] == "Bearer test-token" for request in requests)
 
 
 @pytest.mark.parametrize("next_link", [
     "https://outside.example/next",
     "http://api.atera.com/api/v3/alerts?page=2",
-    "https://app.atera.com/api/v3/alerts?page=2",
+    "http://app.atera.com/api/v3/alerts?page=2",
+    "https://app.atera.com:8443/api/v3/alerts?page=2",
+    "https://user:password@app.atera.com/api/v3/alerts?page=2",
+    "https://app.atera.com/api/v3/tickets?page=2",
+    "https://app.atera.com.outside.example/api/v3/alerts?page=2",
 ])
 def test_untrusted_pagination_link_is_not_followed(client: AteraClient, next_link: str) -> None:
     requests: list[httpx.Request] = []

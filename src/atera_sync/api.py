@@ -57,6 +57,24 @@ def _validated_api_url(path_or_url: str) -> httpx.URL:
     return url
 
 
+def _pagination_url(next_link: str, current_url: str) -> str:
+    current = _validated_api_url(current_url)
+    try:
+        url = current.join(next_link)
+    except httpx.InvalidURL:
+        raise ValueError("Invalid Atera pagination URL") from None
+
+    # Atera's API can return pagination links using its legacy app hostname.
+    # Rewrite only that HTTPS origin and the same endpoint; never send it a token.
+    if (
+        (url.scheme, url.host, url.port) == ("https", "app.atera.com", None)
+        and not url.userinfo
+        and url.path == current.path
+    ):
+        url = url.copy_with(host=current.host)
+    return str(_validated_api_url(str(url)))
+
+
 class AteraClient:
     def __init__(self, api_token: Optional[str] = None) -> None:
         self.api_token = (api_token or os.getenv("ATERA_API_TOKEN", "")).strip()
@@ -212,7 +230,7 @@ class AteraClient:
                 next_url = None
                 next_params = None
             else:
-                next_url = next_link
+                next_url = _pagination_url(next_link, next_url)
                 next_params = None
 
         return items
